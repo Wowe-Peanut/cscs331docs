@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/cashier/components/itemSelectionPage.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/cashier/components/itemSelectionPage.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module Cashier
+ */
+
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { apiURL } from "../../../config";
+import "../stylesheets/itemSelection.css";
+
+/**
+ * ItemSelection Component
+ *
+ * This component handles the selection and price calculation of menu items based on the type of order.
+ *
+ * @component
+ */
+function ItemSelection() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { itemType } = location.state || {};
+
+  const [menuItems, setMenuItems] = useState({
+    sides: [],
+    entrees: [],
+    drinks: [],
+    apps: [],
+  });
+
+  const [itemPrices, setItemPrices] = useState({
+    bowl: 0,
+    plate: 0,
+    cub_meal: 0,
+    family_feast: 0,
+    bigger_plate: 0,
+    a_la_carte: 0,
+  });
+
+  const [selection, setSelection] = useState({
+    type: "",
+    side1: "",
+    side2: "",
+    entree1: "",
+    entree2: "",
+    entree3: "",
+    drink: "",
+    app: "",
+    price: 0,
+  });
+
+  // Initialize the selection type based on the passed itemType
+  useEffect(() => {
+    setSelectionType(itemType);
+  }, [itemType]);
+
+  // Fetch menu items and order types
+  useEffect(() => {
+    fetchMenuItems();
+    fetchOrderTypes();
+  }, []);
+
+  /**
+   * Sets the selection type based on the itemType index.
+   * @param {number} type - The index of the itemType.
+   */
+  const setSelectionType = (type) => {
+    const types = [
+      "Bowl",
+      "Plate",
+      "Bigger Plate",
+      "Cub Meal",
+      "Family Feast",
+      "Drinks",
+      "A La Carte",
+      "Sides/Appetizers",
+    ];
+    setSelection((prev) => ({ ...prev, type: types[type] || "" }));
+  };
+
+  /**
+   * Fetches menu items from the API and organizes them into categories.
+   * @async
+   */
+  const fetchMenuItems = async () => {
+    try {
+      const response = await fetch(`${apiURL}/api/menu`);
+      if (response.ok) {
+        const data = await response.json();
+        setMenuItems({
+          sides: data.filter((item) => item.type === "side"),
+          entrees: data.filter((item) => item.type === "entree"),
+          drinks: data.filter((item) => item.type === "drink"),
+          apps: data.filter((item) => item.type === "appetizer"),
+        });
+      } else {
+        console.error("Failed to fetch menu items.");
+      }
+    } catch (error) {
+      console.error("Error fetching menu items:", error);
+    }
+  };
+
+  /**
+   * Fetches order types and their base prices from the API.
+   *
+   * @async
+   */
+  const fetchOrderTypes = async () => {
+    try {
+      const response = await fetch(`${apiURL}/api/kiosk_orders`);
+      if (response.ok) {
+        const data = await response.json();
+        setItemPrices({
+          bowl: Number(
+            data.find((item) => item.name === "Bowl")?.base_price || 0
+          ),
+          plate: Number(
+            data.find((item) => item.name === "Plate")?.base_price || 0
+          ),
+          cub_meal: Number(
+            data.find((item) => item.name === "Cub Meal")?.base_price || 0
+          ),
+          family_feast: Number(
+            data.find((item) => item.name === "Family Feast")?.base_price || 0
+          ),
+          bigger_plate: Number(
+            data.find((item) => item.name === "Bigger Plate")?.base_price || 0
+          ),
+          a_la_carte: Number(
+            data.find((item) => item.name === "A La Carte")?.base_price || 0
+          ),
+        });
+      } else {
+        console.error("Failed to fetch orderTypes items.");
+      }
+    } catch (error) {
+      console.error("Error fetching orderTypes items:", error);
+    }
+  };
+
+  /**
+   * Handles item selection for various categories.
+   * @param {string} type - The category of the item (e.g., sides, entrees).
+   * @param {Object} item - The selected item object.
+   * @param {string} [slot] - The specific slot to update (if applicable).
+   */
+  const handleSelection = (type, item, slot = "") => {
+    setSelection((prev) => {
+      if (type === "entrees" || type === "sides") {
+        return {
+          ...prev,
+          [slot]: prev[slot] === item.name ? "" : item.name,
+        };
+      }
+
+      return {
+        ...prev,
+        [type]: prev[type] === item.name ? "" : item.name,
+      };
+    });
+  };
+
+  /**
+   * Calculates the total price of the selection.
+   * Includes base price, upcharges, drink price, and appetizer price.
+   * @returns {string} - The total price as a formatted string.
+   */
+  const calculatePrice = () => {
+    let basePrice = getBasePrice(itemType);
+    let upcharge = calculateUpcharges();
+    let drinkPrice = Number(getDrinkPrice());
+    let appPrice = Number(getAppPrice());
+
+    return Number(basePrice + upcharge + drinkPrice + appPrice).toFixed(2);
+  };
+
+  /**
+   * Determines the base price of the selected item type.
+   * @param {number} type - The itemType index.
+   * @returns {number} - The base price.
+   */
+  const getBasePrice = (type) => {
+    const prices = [
+      itemPrices.bowl,
+      itemPrices.plate,
+      itemPrices.bigger_plate,
+      itemPrices.cub_meal,
+      itemPrices.family_feast,
+      0,
+      itemPrices.a_la_carte,
+      0,
+    ];
+    return Number(prices[type]);
+  };
+
+  /**
+   * Calculates upcharges for selected entrees.
+   * @returns {number} - The total upcharges.
+   */
+  const calculateUpcharges = () => {
+    const entrees = [selection.entree1, selection.entree2, selection.entree3];
+    return entrees.reduce((upcharge, entreeName) => {
+      const entree = menuItems.entrees.find((item) => item.name === entreeName);
+      return entree?.upcharge ? upcharge + Number(entree.upcharge) : upcharge;
+    }, 0);
+  };
+
+  /**
+   * Retrieves the price of the selected drink (if applicable).
+   * @returns {number} - The drink price.
+   */
+  const getDrinkPrice = () => {
+    if (selection.drink &amp;&amp; itemType !== 3) {
+      const drink = menuItems.drinks.find(
+        (item) => item.name === selection.drink
+      );
+      return drink &amp;&amp; drink.alt_price ? Number(drink.alt_price) : 0;
+    }
+    return 0;
+  };
+
+  /**
+   * Retrieves the price of the selected appetizer (if applicable).
+   * @returns {number} - The appetizer price.
+   */
+  const getAppPrice = () => {
+    if (selection.app) {
+      const app = menuItems.apps.find((item) => item.name === selection.app);
+      return app &amp;&amp; app.alt_price ? Number(app.alt_price) : 0;
+    }
+    return 0;
+  };
+
+  /**
+   * Handles confirmation of the selection and navigates back to the Cashier screen.
+   */
+  const handleConfirm = () => {
+    const totalPrice = calculatePrice();
+    navigate("/cashier", {
+      state: { selection: { ...selection, price: totalPrice } },
+    });
+  };
+
+  /**
+   * Renders buttons for the items in a specific category.
+   * @param {Array} items - List of items to display.
+   * @param {string} type - The category of the items.
+   * @param {string} [slot] - The specific slot for multi-slot categories.
+   */
+  const renderButtons = (items, type, slot = "") => {
+    return items.map((item, index) => (
+      &lt;div className="cshr_renderBtnContainer">
+        &lt;button
+          key={index}
+          className={`cshr_${type}Btn ${
+            (
+              slot
+                ? selection[slot] === item.name
+                : selection[type].includes(item.name)
+            )
+              ? "selected"
+              : ""
+          }`}
+          onClick={() => handleSelection(type, item, slot)}
+        >
+          {item.name}
+        &lt;/button>
+      &lt;/div>
+    ));
+  };
+
+  const renderSection = (label, items, type, slot = "") => (
+    &lt;>
+      &lt;h1 className="cshr_renderSectionLabel">{label}&lt;/h1>
+      {renderButtons(items, type, slot)}
+    &lt;/>
+  );
+
+  const renderTypeSpecificItems = () => {
+    switch (itemType) {
+      case 0:
+        return renderBowl();
+      case 1:
+        return renderPlate();
+      case 2:
+        return renderBiggerPlate();
+      case 3:
+        return renderCubMeal();
+      case 4:
+        return renderFamilyFeast();
+      case 5:
+        return renderDrinks();
+      case 6:
+        return renderAlaCarte();
+      case 7:
+        return renderSidesAppetizers();
+      default:
+        return null;
+    }
+  };
+
+  const renderBowl = () => (
+    &lt;div className="cshr_bowlContainer">
+      &lt;h1 className="cshr_bowlLabel">Bowl&lt;/h1>
+      {renderSection("Side", menuItems.sides, "sides", "side1")}
+      {renderSection("Entree", menuItems.entrees, "entrees", "entree1")}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  const renderPlate = () => (
+    &lt;div className="cshr_plateContainer">
+      &lt;h1 className="cshr_plateLabel">Plate&lt;/h1>
+      {renderSection("Side", menuItems.sides, "sides", "side1")}
+      {renderSection("Entree 1", menuItems.entrees, "entrees", "entree1")}
+      {renderSection("Entree 2", menuItems.entrees, "entrees", "entree2")}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  const renderBiggerPlate = () => (
+    &lt;div className="cshr_bPlateContainer">
+      &lt;h1 className="cshr_bPlateLabel">Bigger Plate&lt;/h1>
+      {renderSection("Side", menuItems.sides, "sides", "side1")}
+      {renderSection("Entree 1", menuItems.entrees, "entrees", "entree1")}
+      {renderSection("Entree 2", menuItems.entrees, "entrees", "entree2")}
+      {renderSection("Entree 3", menuItems.entrees, "entrees", "entree3")}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  const renderCubMeal = () => (
+    &lt;div className="cshr_bowlContainer">
+      &lt;h1 className="cshr_bowlLabel">Cub Meal&lt;/h1>
+      {renderSection("Side", menuItems.sides, "sides", "side1")}
+      {renderSection("Entree", menuItems.entrees, "entrees", "entree1")}
+      {renderSection("Drink", menuItems.drinks, "drink")}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  const renderFamilyFeast = () => (
+    &lt;div className="cshr_ffContainer">
+      &lt;h1 className="cshr_ffLabel">Family Feast&lt;/h1>
+      {renderSection("Side 1", menuItems.sides, "sides", "side1")}
+      {renderSection("Side 2", menuItems.sides, "sides", "side2")}
+      {renderSection("Entree 1", menuItems.entrees, "entrees", "entree1")}
+      {renderSection("Entree 2", menuItems.entrees, "entrees", "entree2")}
+      {renderSection("Entree 3", menuItems.entrees, "entrees", "entree3")}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  const renderDrinks = () => (
+    &lt;div className="cshr_drinkContainer">
+      {renderSection("Drinks", menuItems.drinks, "drink")}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  const renderAlaCarte = () => (
+    &lt;div className="cshr_acContainer">
+      &lt;h1 className="cshr_acLabel">A La Carte&lt;/h1>
+      {renderSection(
+        "Entrees",
+        [...menuItems.entrees, ...menuItems.sides],
+        "entrees",
+        "entree1"
+      )}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  const renderSidesAppetizers = () => (
+    &lt;div className="cshr_saContainer">
+      {renderSection("Appetizers", menuItems.apps, "app")}
+      &lt;button className="cshr_confirmBtn" onClick={handleConfirm}>
+        Confirm
+      &lt;/button>
+    &lt;/div>
+  );
+
+  return &lt;div className="cshr_itemsContainer">{renderTypeSpecificItems()}&lt;/div>;
+}
+
+export default ItemSelection;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Cashier.html">Cashier</a></li><li><a href="module-Chatbot.html">Chatbot</a></li><li><a href="module-Kiosk.html">Kiosk</a></li><li><a href="module-Kitchen.html">Kitchen</a></li><li><a href="module-Manager.html">Manager</a></li><li><a href="module-Menu.html">Menu</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Wed Dec 04 2024 20:23:27 GMT-0600 (Central Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

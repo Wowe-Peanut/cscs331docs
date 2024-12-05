@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/cashier/index.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/cashier/index.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module Cashier
+ */
+
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { apiURL } from "../../config.js";
+import { logout } from "../../utils/Auth";
+import "./stylesheets/index.css";
+
+/**
+ * Main Cashier Component that displays the checkout process and handles item selections, total, and checkout.
+ *
+ * @component
+ */
+function Cashier() {
+  // State Variables
+  const [time, setTime] = useState(new Date().toLocaleTimeString());
+  const [total, setTotal] = useState(
+    Number(localStorage.getItem("total")) || 0
+  );
+  const [items, setItems] = useState(
+    JSON.parse(localStorage.getItem("items")) || []
+  );
+  const [employee, setEmployee] = useState(
+    sessionStorage.getItem("name") || "Error No Name"
+  );
+  const [isManager, setIsManager] = useState(
+    sessionStorage.getItem("isManager") === "true" || false
+  );
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const { selection } = location.state || {};
+
+  // Handle incoming selection data
+  useEffect(() => {
+    if (selection &amp;&amp; selection.type) {
+      const newItem = {
+        type: selection.type,
+        sides:
+          [
+            selection.side1,
+            selection.side2,
+            selection.side3,
+            selection.side4,
+          ] || [],
+        entrees:
+          [
+            selection.entree1,
+            selection.entree2,
+            selection.entree3,
+            selection.entree4,
+          ] || [],
+        price: selection.price || 0,
+        drink: selection.drink || "",
+        app: selection.app || "",
+      };
+
+      const updatedItems = [...items, newItem];
+      const updatedTotal = total + Number(newItem.price);
+
+      setItems(updatedItems);
+      setTotal(updatedTotal);
+
+      navigate(location.pathname, { replace: true });
+    }
+  }, [selection]);
+
+  // Sync items and total with localStorage
+  useEffect(() => {
+    localStorage.setItem("items", JSON.stringify(items));
+    localStorage.setItem("total", String(total));
+  }, [items, total]);
+
+  // Update time every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTime(new Date().toLocaleTimeString());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handlers
+  const handleDeleteItem = (index) => {
+    setItems((prevItems) => {
+      const itemToRemove = prevItems[index];
+      const updatedItems = prevItems.filter((_, i) => i !== index);
+
+      // Update total by subtracting the price of the item removed
+      const updatedTotal = updatedItems.reduce(
+        (total, item) => total + item.price,
+        0
+      );
+
+      // Update both state and localStorage immediately
+      setTotal(updatedTotal);
+      localStorage.setItem("items", JSON.stringify(updatedItems));
+      localStorage.setItem("total", String(updatedTotal));
+
+      return updatedItems;
+    });
+  };
+
+  //Handles Item Selection Nagivation
+  const handleNavigation = (itemType) => {
+    navigate("/itemSelection", { state: { itemType } });
+  };
+
+  //Handles Manager Navigation
+  const handleManager = () => {
+    if (isManager) {
+      navigate("/manager");
+    }
+  };
+
+  //Handles Logout Navigation
+  const handleLogout = () => {
+    deleteCheckout();
+    logout();
+    navigate("/login");
+  };
+
+  //Handles inventory navigation
+  const handleInventory = () => {
+    navigate("/manager/inventory", { state: { isManager } });
+  };
+
+  //Handles Catering Navigation
+  const handleCatering = () => {
+    navigate("/catering");
+  };
+
+  const handleCheckout = () => {
+    const check = async (name, togo) => {
+      if (name == "" || items.length == 0) {
+        return;
+      }
+
+      const orderJSON = {
+        name: name,
+        type: togo ? "togo" : "here",
+        total: total,
+        employee: "kiosk",
+        orderItems: "",
+      };
+      try {
+        let response = await fetch(`${apiURL}/api/kiosk/`, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(orderJSON),
+        });
+
+        clear();
+        return response.ok;
+      } catch (error) {
+        return false;
+      }
+    };
+    check();
+    deleteCheckout();
+  };
+
+  const deleteCheckout = () => {
+    setItems([]);
+    setTotal(0);
+
+    localStorage.setItem("items", JSON.stringify([]));
+    localStorage.setItem("total", "0");
+  };
+
+  return (
+    &lt;div className="cshr_container">
+      &lt;NavBar
+        employee={employee}
+        time={time}
+        isManager={isManager}
+        handleLogout={handleLogout}
+        handleManager={handleManager}
+        handleInventory={handleInventory}
+        handleCatering={handleCatering}
+      />
+
+      &lt;CheckoutSection
+        items={items}
+        total={total}
+        handleDeleteItem={handleDeleteItem}
+        deleteCheckout={deleteCheckout}
+        handleCheckout={handleCheckout}
+      />
+
+      &lt;OrderingSection handleNavigation={handleNavigation} />
+    &lt;/div>
+  );
+}
+
+/**
+ * NavBar Component for displaying employee info, time, and management actions.
+ *
+ * @param {Object} props
+ * @param {string} props.employee - Employee name
+ * @param {string} props.time - Current time
+ * @param {boolean} props.isManager - Whether the user is a manager
+ * @param {function} props.handleLogout - Logout handler
+ * @param {function} props.handleManager - Navigate to manager page handler
+ * @param {function} props.handleInventory - Navigate to inventory page handler
+ * @param {function} props.handleCatering - Navigate to catering page handler
+ *
+ * @component
+ */
+function NavBar({
+  employee,
+  time,
+  isManager,
+  handleLogout,
+  handleManager,
+  handleInventory,
+  handleCatering,
+}) {
+  return (
+    &lt;div className="cshr_navBar">
+      &lt;button className="cshr_logoutBtn" onClick={handleLogout}>
+        Logout
+      &lt;/button>
+      &lt;h1 className="cshr_employeeLbl">Logged In: {employee}&lt;/h1>
+      &lt;h1 className="cshr_timeLbl">{time}&lt;/h1>
+      &lt;button className="cshr_managerBtn" onClick={handleManager}>
+        {isManager ? "Manager" : ""}
+      &lt;/button>
+      &lt;button className="cshr_cateringBtn" onClick={handleCatering}>
+        Catering
+      &lt;/button>
+      &lt;button className="cshr_inventoryBtn" onClick={handleInventory}>
+        Inventory
+      &lt;/button>
+    &lt;/div>
+  );
+}
+
+/**
+ * CheckoutSection Component for displaying the checkout details including items, prices, and checkout buttons.
+ *
+ * @param {Object} props
+ * @param {Array} props.items - List of items in the checkout
+ * @param {number} props.total - Total price of the checkout
+ * @param {function} props.handleDeleteItem - Function to delete an item from the checkout
+ * @param {function} props.deleteCheckout - Function to clear the checkout
+ * @param {function} props.handleCheckout - Function to handle the checkout
+ *
+ * @component
+ */
+function CheckoutSection({
+  items,
+  total,
+  handleDeleteItem,
+  deleteCheckout,
+  handleCheckout,
+}) {
+  return (
+    &lt;div className="cshr_checkoutSection">
+      &lt;div className="cshr_itemDisplay">
+        {items.map((item, index) => (
+          &lt;Item
+            key={index}
+            {...item}
+            onDelete={() => handleDeleteItem(index)}
+          />
+        ))}
+      &lt;/div>
+      &lt;div className="cshr_priceDisplay">
+        &lt;h1 className="cshr_taxLbl">Tax: &lt;/h1>
+        &lt;p className="cshr_tax">{(total * 0.08).toFixed(2)}&lt;/p>
+        &lt;h1 className="cshr_totalLbl">Total: &lt;/h1>
+        &lt;p className="cshr_total">{(total * 1.08).toFixed(2)}&lt;/p>
+      &lt;/div>
+      &lt;div className="cshr_chckAndClearBtnContainer">
+        &lt;button className="clrBtn" onClick={deleteCheckout}>
+          Clear
+        &lt;/button>
+        &lt;button className="chkbtn" onClick={handleCheckout}>
+          Checkout
+        &lt;/button>
+      &lt;/div>
+    &lt;/div>
+  );
+}
+
+/**
+ * OrderingSection Component for displaying the buttons to navigate to different item selection categories.
+ *
+ * @param {Object} props
+ * @param {function} props.handleNavigation - Function to handle navigation based on the item type
+ *
+ * @component
+ */
+function OrderingSection({ handleNavigation }) {
+  const buttonData = [
+    { label: "Bowl", type: 0 },
+    { label: "Plate", type: 1 },
+    { label: "Bigger Plate", type: 2 },
+    { label: "Cub Meal", type: 3 },
+    { label: "Family Feast", type: 4 },
+    { label: "Drinks", type: 5 },
+    { label: "A La Carte", type: 6 },
+    { label: "Sides/Appetizers", type: 7 },
+  ];
+
+  return (
+    &lt;div className="cshr_orderingSection">
+      {buttonData.map(({ label, type }) => (
+        &lt;button
+          key={type}
+          className="cshr_typeBtn"
+          onClick={() => handleNavigation(type)}
+        >
+          {label}
+        &lt;/button>
+      ))}
+    &lt;/div>
+  );
+}
+
+/**
+ * Item Component for displaying an individual item in the checkout with details like price, sides, and entrees.
+ *
+ * @param {Object} props
+ * @param {string} props.type - Type of the item (e.g., "Bowl", "Plate")
+ * @param {Array} props.sides - List of sides for the item
+ * @param {Array} props.entrees - List of entrees for the item
+ * @param {number} props.price - Price of the item
+ * @param {string} props.drink - Drink associated with the item
+ * @param {string} props.app - Appetizer associated with the item
+ * @param {function} props.onDelete - Function to delete the item from the checkout
+ *
+ * @component
+ */
+function Item({ type, sides = [], entrees, price, drink, app, onDelete }) {
+  return (
+    &lt;div className="cshr_itemContainer">
+      &lt;h1 className="cshr_typeLbl">{type}&lt;/h1>
+      &lt;div className="cshr_detailsContainer">
+        {price &amp;&amp; (
+          &lt;>
+            &lt;h3 className="cshr_priceLbl">Price:&lt;/h3>
+            &lt;p className="cshr_priceValue">${price}&lt;/p>
+          &lt;/>
+        )}
+      &lt;/div>
+      {sides[0] !== "" &amp;&amp; (
+        &lt;div className="cshr_sidesContainer">
+          &lt;h3 className="cshr_sidesLbl">Sides:&lt;/h3>
+          &lt;ul className="cshr_sideList">
+            {sides.map((side, index) => (
+              &lt;li key={index} className="cshr_sideItem">
+                {side}
+              &lt;/li>
+            ))}
+          &lt;/ul>
+        &lt;/div>
+      )}
+      {entrees[0] !== "" &amp;&amp; (
+        &lt;div className="cshr_entreesContainer">
+          &lt;h3 className="cshr_entreesLbl">Entrees:&lt;/h3>
+          &lt;ul className="cshr_entreeList">
+            {entrees.map((entree, index) => (
+              &lt;li key={index} className="cshr_entreeItem">
+                {entree}
+              &lt;/li>
+            ))}
+          &lt;/ul>
+        &lt;/div>
+      )}
+      {drink &amp;&amp; (
+        &lt;div>
+          &lt;h3>Drinks: &lt;/h3>
+          &lt;p className="cshr_drinkValue">{drink}&lt;/p>
+        &lt;/div>
+      )}
+      {app &amp;&amp; (
+        &lt;div>
+          &lt;h3>Appetizers: &lt;/h3>
+          &lt;p className="cshr_drinkValue">{app}&lt;/p>
+        &lt;/div>
+      )}
+      &lt;button className="cshr_deleteBtn" onClick={onDelete}>
+        X
+      &lt;/button>
+    &lt;/div>
+  );
+}
+
+export default Cashier;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Cashier.html">Cashier</a></li><li><a href="module-Chatbot.html">Chatbot</a></li><li><a href="module-Kiosk.html">Kiosk</a></li><li><a href="module-Kitchen.html">Kitchen</a></li><li><a href="module-Manager.html">Manager</a></li><li><a href="module-Menu.html">Menu</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Wed Dec 04 2024 20:23:27 GMT-0600 (Central Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
